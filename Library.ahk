@@ -3,14 +3,7 @@
 ; All times are in ms
 ;----------------------------------------------------------------------
 
-; To use:
-; Make a new AHK file for the new character, that looks like this:
-; 
-; #Include, Library.ahk
-
-; AddBuff(3, 4800)
-; AddBuff(4, 4200)
-; AddBuff(5, 4800)
+; See other files in this directory for examples of usage.
 
 ;
 ; Implementation details
@@ -29,7 +22,7 @@ LastAttack := 0
 
 ; Bind functions to their keys
 ; We don't use :: notation because that messes up multi-file initialisation
-; TODO: How to bind to "`" using this method?! ``` generates one, but that's no good.
+; TODO: How to bind to "`" using this method?! ``` generates one, but that doesn't seem to help
 toggleActive := Func("ToggleActive").Bind()
 HotKey, ~XButton2, %toggleActive%
 
@@ -39,11 +32,16 @@ HotKey, ~RButton, %attackDown%
 attackUp := Func("AttackUp").Bind()
 HotKey, ~RButton up, %attackUp%
 
-AddBuff(key, duration)
+; Add a new monitored buff
+; "key" is what we send to PoE activate it
+; "duration" is the time it lasts for, in milliseconds (e.g. 4800 = 4.8 seconds)
+; "always" indicates whether this buff should always be active, regardless of our attacks
+;    this is handy for Quicksilvers and other "free" buffs
+AddBuff(key, duration, always=No)
 {
     global Buffs
     
-    Buffs[key] := new Buff(key, duration)
+    Buffs[key] := new Buff(key, duration, always)
 }
 
 AttackDown()
@@ -61,12 +59,12 @@ AttackUp()
     HoldAttack := false
 }
 
-UseAllReadyBuffs()
+UseAllReadyBuffs(attacked)
 {
     global Buffs
 
     for key, value in Buffs {
-        value.UseIfReady()
+        value.UseIfReady(attacked)
     }
 }
 
@@ -75,10 +73,9 @@ CheckForAttacks()
     global HoldAttack
     global LastAttack
 
-    if (((A_TickCount - LastAttack) < 500) or HoldAttack)
-    {
-        UseAllReadyBuffs()
-    }
+    attacked := (((A_TickCount - LastAttack) < 500) or HoldAttack)
+
+    UseAllReadyBuffs(attacked)
 }
 
 ; Activate or deactivate automatic buff usage
@@ -89,12 +86,12 @@ ToggleActive()
     UseBuffs := not UseBuffs
     if (UseBuffs)
     {
-        ; ToolTip, Buff Use On, 0, 0
+        ToolTip, Buff Use On, 0, 0
         SetTimer, CheckForAttacks, 100
     }
     else
     {
-        ; ToolTip, Buf Use Off, 0, 0
+        ToolTip, Buff Use Off, 0, 0
         SetTimer, CheckForAttacks, Off
     }
 }
@@ -106,15 +103,16 @@ ToggleActive()
 ;
 class Buff
 {
-    __New(key, duration)
+    __New(key, duration, always)
     {
         this.key := key
         this.duration := duration
+        this.always := always
         this.lastUsed := 0
 
         useFunc := this.Use.Bind(this)
 
-        HotKey, ~%key%, %useFunc%, On
+        HotKey, %key%, %useFunc%, On
     }
 
     IsReady()
@@ -122,9 +120,9 @@ class Buff
         return ((A_TickCount - this.lastUsed) > this.duration)
     }
 
-    UseIfReady()
+    UseIfReady(attacked)
     {
-        if this.IsReady()
+        if this.IsReady() and (attacked or this.always)
         {
             this.Use()
         }
