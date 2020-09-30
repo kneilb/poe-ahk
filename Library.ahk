@@ -37,7 +37,7 @@ HotKey, ~RButton up, %attackUp%
 ; "duration" is the time it lasts for, in milliseconds (e.g. 4800 = 4.8 seconds)
 ; "always" indicates whether this buff should always be active, regardless of our attacks
 ;    this is handy for Quicksilvers and other "free" buffs
-AddBuff(key, duration, always=No)
+AddBuff(key, duration, always=False)
 {
     global Buffs
     
