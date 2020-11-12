@@ -23,6 +23,7 @@ LastAttack := 0
 ; Bind functions to their keys
 ; We don't use :: notation because that messes up multi-file initialisation
 ; TODO: How to bind to "`" using this method?! ``` generates one, but that doesn't seem to help
+; TODO: what does ~ do?!?!
 toggleActive := Func("ToggleActive").Bind()
 HotKey, ~XButton2, %toggleActive%
 
@@ -86,12 +87,12 @@ ToggleActive()
     UseBuffs := not UseBuffs
     if (UseBuffs)
     {
-        ToolTip, Buff Use On, 0, 0
+        ToolTip, Buff Use On, 1200, 10
         SetTimer, CheckForAttacks, 100
     }
     else
     {
-        ToolTip, Buff Use Off, 0, 0
+        ToolTip
         SetTimer, CheckForAttacks, Off
     }
 }
