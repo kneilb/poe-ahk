@@ -15,15 +15,15 @@
 #Warn
 #Persistent
 
-; TODO: refactor to move globals into a single top-level class
-
 ; Key bindings (NB: "``" means `, seems to be an escape sequence)
 ; ACTIVATE_KEY := "XButton2" ; "forward" button on my mouse; I use "back" instead of middle for the alt attack
 ACTIVATE_KEY := "``"
 ATTACK_KEY := "RButton"
 
-; Add a new monitored buff
-; "key" is what we send to PoE activate it (e.g. "2", "r")
+; Add a new monitored buff.
+; Call this once for each buff that you want to be monitored by the script.
+; 
+; "key" is what we send to PoE activate the buff (e.g. "2", "r")
 ; "duration" is the time it lasts for, in milliseconds (e.g. 4800 = 4.8 seconds)
 ; "always" indicates whether this buff should always be active, regardless of our attacks.
 ;    This is handy for Quicksilver flasks and other "free" buffs.
@@ -32,17 +32,14 @@ AddBuff(key, duration, always=false)
 {
     global monitor
 
+    ; NB. Just a convenience wrapper around singleton BuffMonitor instance
     monitor.AddBuff(key, duration, always)
 }
-
-; Buffs := []
-; UseBuffs := false
-; HoldAttack := false
-; LastAttack := 0
 
 ; Bind functions to their keys
 ; We don't use :: notation because that messes up multi-file initialisation
 ; NB: ~ is needed so the "normal" event happens; without it the key is swallowed by the script and PoE doesn't see it
+; TODO: singleton pattern with func? meh.
 monitor := new BuffMonitor()
 
 toggleActiveFunc := monitor.ToggleActive.Bind(monitor)
@@ -63,6 +60,7 @@ class BuffMonitor
         this.useBuffs := false
         this.holdAttack := false
         this.lastAttackTickCount := 0
+        this.pollFunc := this.Poll.Bind(this)
     }
 
     AddBuff(key, duration, always=false)
@@ -97,7 +95,7 @@ class BuffMonitor
 
     ToggleActive()
     {
-        pollFunc := this.Poll.Bind(this)
+        pollFunc := this.pollFunc
 
         this.useBuffs := not this.useBuffs
 
