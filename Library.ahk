@@ -15,85 +15,102 @@
 #Warn
 #Persistent
 
-Buffs := []
-UseBuffs := false
-HoldAttack := false
-LastAttack := 0
+; TODO: refactor to move globals into a single top-level class
+
+; Key bindings (NB: "``" means `, seems to be an escape sequence)
+; ACTIVATE_KEY := "XButton2" ; "forward" button on my mouse; I use "back" instead of middle for the alt attack
+ACTIVATE_KEY := "``"
+ATTACK_KEY := "RButton"
+
+; Add a new monitored buff
+; "key" is what we send to PoE activate it (e.g. "2", "r")
+; "duration" is the time it lasts for, in milliseconds (e.g. 4800 = 4.8 seconds)
+; "always" indicates whether this buff should always be active, regardless of our attacks.
+;    This is handy for Quicksilver flasks and other "free" buffs.
+;    Optional argument, defaults to false.
+AddBuff(key, duration, always=false)
+{
+    global monitor
+
+    monitor.AddBuff(key, duration, always)
+}
+
+; Buffs := []
+; UseBuffs := false
+; HoldAttack := false
+; LastAttack := 0
 
 ; Bind functions to their keys
 ; We don't use :: notation because that messes up multi-file initialisation
-; TODO: How to bind to "`" using this method?! ``` generates one, but that doesn't seem to help
-; TODO: what does ~ do?!?!
-toggleActive := Func("ToggleActive").Bind()
-HotKey, ~XButton2, %toggleActive%
+; NB: ~ is needed so the "normal" event happens; without it the key is swallowed by the script and PoE doesn't see it
+monitor := new BuffMonitor()
 
-attackDown := Func("AttackDown").Bind()
-HotKey, ~RButton, %attackDown%
+toggleActiveFunc := monitor.ToggleActive.Bind(monitor)
+HotKey, ~%ACTIVATE_KEY%, %toggleActiveFunc%
 
-attackUp := Func("AttackUp").Bind()
-HotKey, ~RButton up, %attackUp%
+attackDownFunc := monitor.AttackDown.Bind(monitor)
+HotKey, ~%ATTACK_KEY%, %attackDownFunc%
 
-; Add a new monitored buff
-; "key" is what we send to PoE activate it
-; "duration" is the time it lasts for, in milliseconds (e.g. 4800 = 4.8 seconds)
-; "always" indicates whether this buff should always be active, regardless of our attacks
-;    this is handy for Quicksilvers and other "free" buffs
-AddBuff(key, duration, always=False)
+attackUpFunc := monitor.AttackUp.Bind(monitor)
+HotKey, ~%ATTACK_KEY% Up, %attackUpFunc%
+
+; Monitors buffs & attacks, uses buffs when ready
+class BuffMonitor
 {
-    global Buffs
-    
-    Buffs[key] := new Buff(key, duration, always)
-}
-
-AttackDown()
-{
-    global HoldAttack
-    global LastAttack
-
-    HoldAttack := true
-    LastAttack := A_TickCount
-}
-
-AttackUp()
-{
-    global HoldAttack
-    HoldAttack := false
-}
-
-UseAllReadyBuffs(attacked)
-{
-    global Buffs
-
-    for key, value in Buffs {
-        value.UseIfReady(attacked)
+    __New()
+    {
+        this.buffs := []
+        this.useBuffs := false
+        this.holdAttack := false
+        this.lastAttackTickCount := 0
     }
-}
 
-CheckForAttacks()
-{
-    global HoldAttack
-    global LastAttack
+    AddBuff(key, duration, always=false)
+    {
+        this.buffs[key] := new Buff(key, duration, always)
+    }
 
-    attacked := (((A_TickCount - LastAttack) < 500) or HoldAttack)
+    AttackDown()
+    {
+        this.holdAttack := true
+        this.lastAttackTickCount := A_TickCount
+    }
+
+    AttackUp()
+    {
+        this.holdAttack := false
+    }
 
     UseAllReadyBuffs(attacked)
-}
-
-; Activate or deactivate automatic buff usage
-ToggleActive()
-{
-    global UseBuffs
-
-    UseBuffs := not UseBuffs
-    if (UseBuffs)
     {
-        ToolTip, Buff Use On, 1200, 10
-        SetTimer, CheckForAttacks, 100
+        for key, value in this.buffs {
+            value.UseIfReady(attacked)
+        }
     }
-    else
+
+    Poll()
     {
-        ToolTip
-        SetTimer, CheckForAttacks, Off
+        attacked := this.holdAttack or ((A_TickCount - this.lastAttackTickCount) < 500)
+
+        this.UseAllReadyBuffs(attacked)
+    }
+
+    ToggleActive()
+    {
+        pollFunc := this.Poll.Bind(this)
+
+        this.useBuffs := not this.useBuffs
+
+        if (this.useBuffs)
+        {
+            ToolTip, Buff Use On, 1200, 10
+            SetTimer, %pollFunc%, 100
+        }
+        else
+        {
+            ToolTip
+            SetTimer, %pollFunc%, Off
+        }
     }
 }
 
@@ -109,7 +126,7 @@ class Buff
         this.key := key
         this.duration := duration
         this.always := always
-        this.lastUsed := 0
+        this.lastUsedTickCount := 0
 
         useFunc := this.Use.Bind(this)
 
@@ -118,7 +135,7 @@ class Buff
 
     IsReady()
     {
-        return ((A_TickCount - this.lastUsed) > this.duration)
+        return ((A_TickCount - this.lastUsedTickCount) > this.duration)
     }
 
     UseIfReady(attacked)
@@ -131,7 +148,7 @@ class Buff
 
     Use()
     {
-        this.lastUsed := A_TickCount
+        this.lastUsedTickCount := A_TickCount
         key := this.key
         Send %key%
     }
